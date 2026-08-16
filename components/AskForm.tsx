@@ -11,6 +11,13 @@ export interface Example {
   about: PanelRequest["about"];
 }
 
+export interface ProviderInfo {
+  id: "anthropic" | "ollama" | null;
+  label: string | null;
+  model: string | null;
+  caveat: string | null;
+}
+
 const ABOUT_OPTIONS: Array<{ value: PanelRequest["about"]; label: string }> = [
   { value: "me", label: "Me" },
   { value: "someone-i-care-about", label: "Someone I care about" },
@@ -19,12 +26,14 @@ const ABOUT_OPTIONS: Array<{ value: PanelRequest["about"]; label: string }> = [
 
 export function AskForm({
   demo,
+  provider,
   examples,
   busy,
   onSubmit,
   onDemo,
 }: {
   demo: boolean;
+  provider: ProviderInfo | null;
   examples: Example[];
   busy: boolean;
   onSubmit: (request: PanelRequest) => void;
@@ -43,12 +52,15 @@ export function AskForm({
     return (
       <div className="space-y-5">
         <div className="rounded-2xl border border-line bg-raised p-5">
-          <h2 className="font-display text-lg">Running without an API key</h2>
+          <h2 className="font-display text-lg">No model is connected</h2>
           <p className="mt-2 max-w-prose text-sm text-muted">
-            This server has no <code className="font-mono text-xs">ANTHROPIC_API_KEY</code>, so it
-            can only replay three debates that were written out in full. It will not answer your own
-            question — showing you a canned panel with your words at the top would be a lie about
-            what you were reading.
+            This server has no provider configured, so it can only replay three debates that were
+            written out in full. It will not answer your own question — showing you a canned panel
+            with your words at the top would be a lie about what you were reading.
+          </p>
+          <p className="mt-2 max-w-prose text-sm text-muted">
+            To ask your own: set <code className="font-mono text-xs">ANTHROPIC_API_KEY</code>, or
+            run a model locally and set <code className="font-mono text-xs">MHDEBATE_PROVIDER=ollama</code>.
           </p>
         </div>
 
@@ -79,6 +91,19 @@ export function AskForm({
         onSubmit({ question: question.trim(), about, includeMeaningVoice });
       }}
     >
+      {provider?.model ? (
+        <p className="text-xs text-muted">
+          Running on <span className="font-mono">{provider.model}</span>
+          {provider.label ? ` via ${provider.label}` : null}.
+        </p>
+      ) : null}
+
+      {provider?.caveat ? (
+        <p className="max-w-prose rounded-xl border border-warn/40 bg-warn-soft p-4 text-sm">
+          {provider.caveat}
+        </p>
+      ) : null}
+
       <div>
         <label htmlFor="question" className="block font-display text-lg">
           What are you trying to understand?

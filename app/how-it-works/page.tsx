@@ -94,11 +94,30 @@ export default function HowItWorksPage() {
         </ul>
       </Block>
 
+      <Block title="Which model is behind the voices">
+        <p>
+          This app can run on a hosted model or on one running entirely on the computer serving the
+          page. If it's the local one, you'll see a note saying so above the question box, and a
+          warning attached to the debate itself.
+        </p>
+        <p>
+          That warning is not boilerplate. Smaller local models follow instructions less reliably,
+          so the voices come out flatter, repeat each other more, and occasionally slip past the
+          no-diagnosis rule the prompts set. The safety screen is not affected — it is ordinary
+          pattern matching and never asks a model anything — but the discussion itself should be
+          read as a rough draft.
+        </p>
+      </Block>
+
       <Block title="What happens to what you write">
         <p>
-          Your question is sent to Anthropic's API to generate the discussion, and that is the whole
+          Your question goes to whichever model is generating the discussion, and that is the whole
           journey. There is no account, no database, and no server-side log of what you asked. Close
           the tab and it is gone — including from this page, which keeps nothing.
+        </p>
+        <p>
+          If this instance is running a local model, your question does not leave the machine
+          serving the page at all. The note above the question box tells you which case you're in.
         </p>
         <p>
           That also means there is nothing to come back to. If a debate is useful, copy it somewhere

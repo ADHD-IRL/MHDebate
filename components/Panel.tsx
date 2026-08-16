@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { AskForm, type Example } from "./AskForm";
+import { AskForm, type Example, type ProviderInfo } from "./AskForm";
 import { ChallengeCard } from "./ChallengeCard";
 import { StageRail } from "./StageRail";
 import { SupportPanel } from "./SupportPanel";
@@ -18,7 +18,11 @@ import type { PanelRequest } from "@/lib/types";
  *  the way once the panel is actually talking. */
 export function Panel({ intro }: { intro?: React.ReactNode }) {
   const { state, start, reset } = usePanel();
-  const [config, setConfig] = useState<{ demo: boolean; examples: Example[] } | null>(null);
+  const [config, setConfig] = useState<{
+    demo: boolean;
+    examples: Example[];
+    provider: ProviderInfo | null;
+  } | null>(null);
   const [pending, setPending] = useState<PanelRequest | null>(null);
   const transcriptRef = useRef<HTMLDivElement>(null);
 
@@ -27,10 +31,16 @@ export function Panel({ intro }: { intro?: React.ReactNode }) {
     fetch("/api/panel")
       .then((r) => r.json())
       .then((data) => {
-        if (!cancelled) setConfig({ demo: Boolean(data.demo), examples: data.examples ?? [] });
+        if (!cancelled) {
+          setConfig({
+            demo: Boolean(data.demo),
+            examples: data.examples ?? [],
+            provider: data.provider ?? null,
+          });
+        }
       })
       .catch(() => {
-        if (!cancelled) setConfig({ demo: false, examples: [] });
+        if (!cancelled) setConfig({ demo: false, examples: [], provider: null });
       });
     return () => {
       cancelled = true;
@@ -150,6 +160,7 @@ export function Panel({ intro }: { intro?: React.ReactNode }) {
         {config ? (
           <AskForm
             demo={config.demo}
+            provider={config.provider}
             examples={config.examples}
             busy={false}
             onSubmit={(request) => run(request)}
