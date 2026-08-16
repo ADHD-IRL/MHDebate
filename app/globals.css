@@ -1,0 +1,73 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light dark;
+
+  /* System stacks rather than next/font: one less thing that fails when the
+     build runs somewhere without egress to Google Fonts. */
+  --font-display: ui-serif, Georgia, "Iowan Old Style", "Times New Roman", serif;
+  --font-body: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+
+  --canvas: 246 245 242;
+  --surface: 255 255 255;
+  --raised: 240 238 233;
+  --ink: 26 28 27;
+  --muted: 91 98 95;
+  --line: 219 216 209;
+  --accent: 26 92 84;
+  --accent-soft: 226 238 235;
+  --warn: 146 58 26;
+  --warn-soft: 250 235 228;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --canvas: 17 19 18;
+    --surface: 25 28 27;
+    --raised: 33 37 35;
+    --ink: 235 236 233;
+    --muted: 158 165 161;
+    --line: 55 60 57;
+    --accent: 122 197 183;
+    --accent-soft: 30 47 44;
+    --warn: 232 156 124;
+    --warn-soft: 54 34 26;
+  }
+}
+
+body {
+  background-color: rgb(var(--canvas));
+  color: rgb(var(--ink));
+  font-family: var(--font-body), system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+:focus-visible {
+  outline: 2px solid rgb(var(--accent));
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Long panel text is plain paragraphs; give it readable rhythm without a
+   typography plugin dependency. */
+.panel-prose p {
+  margin-bottom: 0.75rem;
+  line-height: 1.65;
+}
+
+.panel-prose p:last-child {
+  margin-bottom: 0;
+}
