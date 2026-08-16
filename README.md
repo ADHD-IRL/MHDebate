@@ -9,7 +9,7 @@ didn't, and what you could notice that would settle it.
 
 ```
 npm install
-cp .env.example .env.local     # optional — see "Running without a key"
+cp .env.example .env.local     # optional — it runs without one
 npm run dev                    # http://localhost:3000
 ```
 
@@ -61,36 +61,93 @@ screen runs in the browser on every keystroke and again on the server, where it 
 
 ---
 
-## Running without a key
+## Running without a model
 
-With no `ANTHROPIC_API_KEY` the app serves three debates that were written out in full, replayed at
-the pace a live panel runs at. It will **not** answer your own question in this mode — putting your
-words at the top of a canned panel would misrepresent what you were reading — so the form is
-replaced by the three examples.
+With no provider configured the app serves three debates that were written out in
+full, replayed at the pace a live panel runs at. It will **not** answer your own question in this
+mode — putting your words at the top of a canned panel would misrepresent what you were reading —
+so the form is replaced by the three examples.
 
 This is also how to demo it to someone without spending anything.
 
-## Running live
+## Running on a hosted model
 
 ```bash
 echo 'ANTHROPIC_API_KEY=sk-ant-...' >> .env.local
 npm run dev
 ```
 
-| Variable | Default | Purpose |
-|---|---|---|
-| `ANTHROPIC_API_KEY` | — | Unset means demo mode. |
-| `ANTHROPIC_MODEL` | `claude-opus-5` | A full debate is ~12 model calls; a smaller model is a reasonable trade for volume. |
-| `MHDEBATE_RATE_LIMIT` | `12` | Debates per IP per hour, in-process. `0` disables. |
-
-Model details: adaptive thinking with `effort: "low"` for the voice turns and `"medium"` for the
-summary; structured outputs for panel selection, pairing, and synthesis; prose streamed token by
-token for the takes and the cross-talk. Server-side refusal fallbacks are on by default
+Adaptive thinking with `effort: "low"` for the voice turns and `"medium"` for the summary;
+structured outputs for panel selection, pairing, and synthesis; prose streamed token by token for
+the takes and the cross-talk. Server-side refusal fallbacks are on by default
 (`server-side-fallback-2026-07-01`) because mental-health text sits close enough to the safety
 classifiers that a reader would otherwise hit an unexplained dead end; if the deployment rejects the
-beta, `lib/anthropic.ts` retries without it.
+beta, the provider retries without it.
 
----
+A debate is ~12 calls. Budget tens of cents each on `claude-opus-5`, and measure your own before
+trusting that.
+
+## Running on your own machine (Ollama)
+
+```bash
+ollama serve
+ollama pull llama3.1:8b
+
+echo 'MHDEBATE_PROVIDER=ollama' >> .env.local
+npm run dev
+```
+
+That is the whole setup — no key, and the defaults match a stock `ollama serve`. Every question
+stays on your machine, which for this subject matter is the strongest privacy story available.
+
+**Read the caveat the app shows you.** Local models follow instructions less reliably than the
+hosted ones the prompts were written against, so expect weaker voices, more repetition, and
+occasional slips past the no-diagnosis rule. The app says this in the UI rather than only in a
+README, because someone reading a panel about their own mental health deserves to know how much
+weight it carries. The safety screen is unaffected — it is deterministic and never asks a model
+anything.
+
+Three things a local run gets wrong if left alone, all handled in `lib/providers/ollama.ts`:
+
+| Problem | What the provider does |
+|---|---|
+| Reasoning models emit `<think>…</think>` inline, mid-stream, straight at the reader | A streaming filter strips it, holding back just enough tail to catch tags split across chunks |
+| Ollama's default context window truncates the synthesis prompt — which carries every take and every push-back — silently | `num_ctx` defaults to 8192 here; raise `OLLAMA_NUM_CTX` for a bigger panel |
+| Schema-constrained output comes back wrapped in prose or code fences | Balanced-brace extraction first, then a retry in plain JSON mode with the schema moved into the prompt |
+
+It also preflights `/api/tags` once per debate, so "that model isn't pulled" and "Ollama isn't
+running" arrive as one clear sentence naming the command to run — not as four voices failing one at
+a time.
+
+**Model choice matters more than anything else here.** The panel asks for structured JSON three
+times per debate and for voices that hold distinct positions under pressure. Anything below roughly
+8B tends to produce four voices that agree with each other, which defeats the point. If the
+synthesis step keeps failing to parse, that is the signal to go bigger rather than to retry.
+
+Expect minutes, not seconds, per debate on consumer hardware. `OLLAMA_KEEP_ALIVE` (default `10m`
+here) keeps the model resident across the dozen calls; `OLLAMA_NUM_PARALLEL` (default `2`) caps how
+many run at once, because one GPU does not benefit from six. The first round stays independent
+regardless — independence comes from each voice getting its own request and its own context, not
+from them being in flight at the same instant.
+
+## Configuration
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `MHDEBATE_PROVIDER` | inferred | `anthropic`, `ollama`, or `demo`. |
+| `ANTHROPIC_API_KEY` | — | Enables the hosted provider. |
+| `ANTHROPIC_MODEL` | `claude-opus-5` | |
+| `OLLAMA_MODEL` | `llama3.1:8b` | |
+| `OLLAMA_HOST` | `http://127.0.0.1:11434` | |
+| `OLLAMA_NUM_CTX` | `8192` | Raise before anything else if output looks truncated. |
+| `OLLAMA_KEEP_ALIVE` | `10m` | Keeps the model resident between calls. |
+| `OLLAMA_NUM_PARALLEL` | `2` | Concurrent requests. |
+| `OLLAMA_THINK` | unset | Only for models with a separate reasoning channel. |
+| `MHDEBATE_RATE_LIMIT` | `12` | Debates per IP per hour, in-process. `0` disables. |
+
+Selection is explicit first, then inferred, and never guesses in a way that costs money: an unset
+`MHDEBATE_PROVIDER` with no Anthropic key and no Ollama setting lands in demo mode rather than
+quietly reaching for something.
 
 ## How a debate runs
 
@@ -120,7 +177,10 @@ lib/
   voices.ts     the 14 voices, their lenses, their blind spots, their source roles
   safety.ts     the four-level screen and the support directory
   engine.ts     prompts, JSON schemas, normalisation, orchestration
-  anthropic.ts  the only file that talks to the model
+  providers/    the only code that talks to a model
+    types.ts    the two calls the engine needs: stream prose, return JSON
+    anthropic.ts
+    ollama.ts   plus thinking-tag stripping and JSON recovery
   demo.ts       the three written examples
 data/           the source 63-agent registry, kept for provenance
 tests/          42 tests, no network
@@ -134,13 +194,17 @@ npm run typecheck
 npm run build
 ```
 
-`tests/runPanel.test.ts` stubs the model layer and asserts the properties that would otherwise fail
-silently: that the first takes really do run in parallel, that a crisis question reaches no model
-call at all, that one dead voice doesn't sink the run, and that four dead voices do.
+`tests/runPanel.test.ts` stubs the provider and asserts the properties that would otherwise fail
+silently: that the first takes really do run in parallel, that the concurrency cap doesn't drop
+anyone, that a crisis question reaches no model call at all, that one dead voice doesn't sink the
+run, and that four dead voices do. `tests/ollama.test.ts` covers the thinking-tag stripper (including
+tags split across chunk boundaries), JSON recovery, the schema-rejection fallback, provider
+selection, and every setup-error message.
 
-**Not yet verified against the live API.** The environment this was built in had no API key, so the
-model path has been typechecked against the SDK's request types and exercised through stubs, but no
-real debate has been run end to end. Do that first if you pick this up.
+**Verification status.** The Ollama path has been driven end to end — a full debate through the real
+SSE route against a server speaking Ollama's wire protocol, plus both misconfiguration paths. The
+**Anthropic path has not been run against the live API**: the environment this was built in had no
+key, so it is typechecked against the SDK's request types and exercised through stubs only.
 
 ## Deliberate limits
 

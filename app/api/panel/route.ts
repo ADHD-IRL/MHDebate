@@ -1,5 +1,11 @@
 import { NextRequest } from "next/server";
-import { hasApiKey, model, RefusalError } from "@/lib/anthropic";
+import {
+  activeProvider,
+  preflight,
+  providerInfo,
+  ProviderSetupError,
+  RefusalError,
+} from "@/lib/providers";
 import { DEMOS, demoBySlug, type DemoDebate } from "@/lib/demo";
 import { MAX_QUESTION_LENGTH, MIN_QUESTION_LENGTH } from "@/lib/constants";
 import { runPanel } from "@/lib/engine";
@@ -11,9 +17,10 @@ export const dynamic = "force-dynamic";
 
 /** Tells the client whether it's talking to a live panel or the worked examples. */
 export async function GET() {
+  const provider = providerInfo();
   return Response.json({
-    demo: !hasApiKey(),
-    model: hasApiKey() ? model() : null,
+    demo: provider.id === null,
+    provider,
     examples: DEMOS.map((d) => ({ slug: d.slug, question: d.question, about: d.about })),
   });
 }
@@ -101,6 +108,10 @@ function describeError(err: unknown): string {
   if (err instanceof RefusalError) {
     return "The model declined to take this one on. That is sometimes over-cautious rather than a judgement about your question — rephrasing in more everyday terms often gets through.";
   }
+  // Setup problems are the operator's to fix and are safe to show verbatim:
+  // they name a command, not an internal.
+  if (err instanceof ProviderSetupError) return err.message;
+
   const message = err instanceof Error ? err.message : String(err);
   if (/abort/i.test(message)) return "The panel was stopped.";
   if (/rate.?limit|429/i.test(message)) {
@@ -125,15 +136,15 @@ export async function POST(req: NextRequest) {
     return Response.json({ error: "Malformed request." }, { status: 400 });
   }
 
-  const demo = !hasApiKey();
+  const provider = activeProvider();
 
-  if (demo) {
+  if (!provider) {
     const example = payload.demoSlug ? demoBySlug(payload.demoSlug) : undefined;
     if (!example) {
       return Response.json(
         {
           error:
-            "This server has no API key, so it can only replay the worked examples. Pick one of those, or add ANTHROPIC_API_KEY to ask your own question.",
+            "No model provider is configured, so this server can only replay the worked examples. Pick one of those, or set ANTHROPIC_API_KEY (or MHDEBATE_PROVIDER=ollama) to ask your own question.",
         },
         { status: 400 },
       );
@@ -183,7 +194,16 @@ export async function POST(req: NextRequest) {
     includeMeaningVoice: payload.includeMeaningVoice === true,
   };
 
-  return sseStream((emit, signal) => runPanel(request, emit, signal), req.signal);
+  return sseStream(async (emit, signal) => {
+    // Catches "Ollama isn't running" or "that model isn't pulled" before the
+    // reader watches four voices fail one at a time.
+    await preflight();
+
+    const caveat = provider.caveat();
+    if (caveat) emit({ type: "notice", message: caveat });
+
+    await runPanel(request, emit, signal);
+  }, req.signal);
 }
 
 // --------------------------------------------------------------- demo replay
