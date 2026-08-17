@@ -8,13 +8,11 @@ import type { PanelEvent } from "@/lib/types";
  */
 const streamProse = vi.fn();
 const structured = vi.fn();
-const maxParallel = vi.fn(() => 8);
 
-vi.mock("@/lib/providers", () => ({
+vi.mock("@/lib/anthropic", () => ({
   streamProse: (...args: unknown[]) => streamProse(...args),
   structured: (...args: unknown[]) => structured(...args),
   RefusalError: class RefusalError extends Error {},
-  maxParallel: () => maxParallel(),
 }));
 
 const { runPanel } = await import("@/lib/engine");
@@ -74,7 +72,6 @@ async function collect(): Promise<PanelEvent[]> {
 beforeEach(() => {
   streamProse.mockReset();
   structured.mockReset();
-  maxParallel.mockReturnValue(8);
 });
 
 describe("runPanel", () => {
@@ -119,27 +116,6 @@ describe("runPanel", () => {
 
     const events = await collect();
     expect(events.filter((e) => e.type === "take-end")).toHaveLength(4);
-  });
-
-  it("respects the provider's concurrency cap without dropping anyone", async () => {
-    // A local model behind Ollama can only usefully run a couple at a time.
-    maxParallel.mockReturnValue(2);
-    structured.mockImplementation(structuredSequence());
-
-    let inFlight = 0;
-    let peak = 0;
-    streamProse.mockImplementation(async () => {
-      inFlight += 1;
-      peak = Math.max(peak, inFlight);
-      await new Promise((resolve) => setTimeout(resolve, 5));
-      inFlight -= 1;
-      return "text";
-    });
-
-    const events = await collect();
-    expect(peak).toBeLessThanOrEqual(2);
-    expect(events.filter((e) => e.type === "take-end")).toHaveLength(4);
-    expect(events.some((e) => e.type === "synthesis")).toBe(true);
   });
 
   it("stops the whole run if a voice raises the risk flag", async () => {
