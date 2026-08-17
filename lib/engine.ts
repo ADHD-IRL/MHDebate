@@ -1,4 +1,4 @@
-import { RefusalError, maxParallel, streamProse, structured } from "./providers";
+import { RefusalError, streamProse, structured } from "./anthropic";
 import { MAX_EXCHANGES, MAX_SEATED, MIN_SEATED } from "./constants";
 import { screen } from "./safety";
 import { VOICES, eligibleVoices, isVoiceId } from "./voices";
@@ -514,46 +514,10 @@ export function normaliseSynthesis(raw: Synthesis, takes: Take[]): Synthesis {
 const HALT_TOKEN = "STOP-RISK";
 
 /**
- * Runs tasks with at most `limit` in flight, settling rather than rejecting so
- * one dead voice cannot sink a round. Results come back in input order.
- *
- * The cap is about hardware, not correctness: a hosted API is happy to take
- * six at once, a single local GPU is not. Independence in the first round comes
- * from each voice getting its own request with its own context — it does not
- * depend on them being in flight simultaneously, so throttling costs nothing
- * but time.
- */
-async function settleWithLimit<T>(
-  tasks: Array<() => Promise<T>>,
-  limit: number,
-): Promise<Array<PromiseSettledResult<T>>> {
-  const results = new Array<PromiseSettledResult<T>>(tasks.length);
-  let next = 0;
-
-  const worker = async (): Promise<void> => {
-    for (;;) {
-      const index = next;
-      next += 1;
-      if (index >= tasks.length) return;
-      try {
-        results[index] = { status: "fulfilled", value: await tasks[index]() };
-      } catch (reason) {
-        results[index] = { status: "rejected", reason };
-      }
-    }
-  };
-
-  await Promise.all(
-    Array.from({ length: Math.max(1, Math.min(limit, tasks.length)) }, worker),
-  );
-  return results;
-}
-
-/**
  * Runs the whole panel, pushing events as they happen. Every stage is awaited
  * before the next begins, except the first takes and the cross-talk replies,
- * which run concurrently — the first takes must be independent, because the
- * point of the round is that no voice can see another's.
+ * which run in parallel — the first takes must, because the point of the round
+ * is that no voice can see another's.
  */
 export async function runPanel(
   request: PanelRequest,
@@ -571,11 +535,9 @@ export async function runPanel(
   emit({ type: "panel", panel });
 
   emit({ type: "stage", stage: "first-takes" });
-  const lanes = maxParallel();
   const seatedVoices = panel.seated.map((s) => VOICES[s.id]);
-  const settled = await settleWithLimit(
-    seatedVoices.map((voice) => () => firstTake(voice, request, emit, signal)),
-    lanes,
+  const settled = await Promise.allSettled(
+    seatedVoices.map((voice) => firstTake(voice, request, emit, signal)),
   );
 
   const takes: Take[] = [];
@@ -601,9 +563,8 @@ export async function runPanel(
 
   emit({ type: "stage", stage: "cross-talk" });
   const exchanges = await planCrossTalk(takes, signal).catch(() => []);
-  const challengeResults = await settleWithLimit(
-    exchanges.map((e) => () => crossTalk(e, takes, request, emit, signal)),
-    lanes,
+  const challengeResults = await Promise.allSettled(
+    exchanges.map((e) => crossTalk(e, takes, request, emit, signal)),
   );
   const challenges = challengeResults
     .filter(
