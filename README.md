@@ -111,6 +111,31 @@ Degradation is deliberate: a voice that fails is dropped with a visible notice a
 on; a failed pairing step skips cross-talk but still produces a summary; fewer than two surviving
 voices aborts rather than staging a fake debate.
 
+## Taking it to an appointment
+
+After a debate finishes, one more button rewrites it for the person the reader is about to sit in
+front of. It is a second model call, run only on request.
+
+The audience change is the whole job. The consumer summary is written to be read slowly by someone
+worried about themselves; the clinical one is written to be skimmed in under a minute — reason for
+contact, history, functional impact, questions worth asking, in the order a history gets taken.
+
+Two constraints make it safe to hand over:
+
+- **No diagnosis, enforced twice.** `areasToExplore` names domains and questions, never conditions.
+  The prompt forbids labels and `namesADiagnosis()` in `lib/clinical.ts` drops any area that
+  arrives carrying one. A document that lands on a clinician's desk naming a condition anchors the
+  appointment before it starts, and this tool has no standing to do that. The page says why the
+  differential is missing, so its absence reads as deliberate rather than as an oversight.
+- **The framing is code, not model output.** The banner, the verbatim quote, the safety-screen note
+  (derived from `screen()`, not asked for), and the "what this document is not" list are assembled
+  in `lib/report.ts` where they cannot be paraphrased into something weaker. Every page carries
+  *AI-generated from patient self-report · not a clinical document* in the footer.
+
+`lib/pdf.ts` is a small dependency-free PDF writer — base-14 Helvetica, so no font embedding. The
+document is built **in the browser and never uploaded**, which matters more here than it would
+elsewhere. There is also a plain-text export for pasting into a portal message.
+
 ## Layout
 
 ```
@@ -120,6 +145,9 @@ lib/
   voices.ts     the 14 voices, their lenses, their blind spots, their source roles
   safety.ts     the four-level screen and the support directory
   engine.ts     prompts, JSON schemas, normalisation, orchestration
+  clinical.ts   the clinician-facing second pass, and the no-diagnosis guard
+  report.ts     the document model both the PDF and the text export render from
+  pdf.ts        a small dependency-free PDF writer, runs in the browser
   anthropic.ts  the only file that talks to the model
   demo.ts       the three written examples
 data/           the source 63-agent registry, kept for provenance
@@ -134,7 +162,9 @@ npm run typecheck
 npm run build
 ```
 
-`tests/runPanel.test.ts` stubs the model layer and asserts the properties that would otherwise fail
+`tests/report.test.ts` checks the parts of the PDF that fail silently — xref offsets landing on
+their object headers, declared stream lengths matching the bytes written, parenthesis escaping —
+plus that the report always states what it is not. `tests/runPanel.test.ts` stubs the model layer and asserts the properties that would otherwise fail
 silently: that the first takes really do run in parallel, that a crisis question reaches no model
 call at all, that one dead voice doesn't sink the run, and that four dead voices do.
 

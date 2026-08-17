@@ -3,6 +3,7 @@ import { hasApiKey, model, RefusalError } from "@/lib/anthropic";
 import { DEMOS, demoBySlug, type DemoDebate } from "@/lib/demo";
 import { MAX_QUESTION_LENGTH, MIN_QUESTION_LENGTH } from "@/lib/constants";
 import { runPanel } from "@/lib/engine";
+import { clientKey, rateLimit } from "@/lib/ratelimit";
 import { needsAcknowledgement, screen } from "@/lib/safety";
 import type { PanelEvent, PanelRequest } from "@/lib/types";
 
@@ -16,38 +17,6 @@ export async function GET() {
     model: hasApiKey() ? model() : null,
     examples: DEMOS.map((d) => ({ slug: d.slug, question: d.question, about: d.about })),
   });
-}
-
-// ------------------------------------------------------------ rate limiting
-
-const RATE_WINDOW_MS = 60 * 60 * 1000;
-const buckets = new Map<string, number[]>();
-
-function rateLimit(key: string): boolean {
-  const cap = Number(process.env.MHDEBATE_RATE_LIMIT ?? 12);
-  if (!Number.isFinite(cap) || cap <= 0) return true;
-
-  const now = Date.now();
-  const recent = (buckets.get(key) ?? []).filter((t) => now - t < RATE_WINDOW_MS);
-  if (recent.length >= cap) {
-    buckets.set(key, recent);
-    return false;
-  }
-  recent.push(now);
-  buckets.set(key, recent);
-
-  // Keep the map from growing without bound on a long-lived server.
-  if (buckets.size > 5000) {
-    for (const [k, v] of buckets) {
-      if (v.every((t) => now - t >= RATE_WINDOW_MS)) buckets.delete(k);
-    }
-  }
-  return true;
-}
-
-function clientKey(req: NextRequest): string {
-  const forwarded = req.headers.get("x-forwarded-for");
-  return forwarded?.split(",")[0]?.trim() || req.headers.get("x-real-ip") || "local";
 }
 
 // ------------------------------------------------------------------- stream

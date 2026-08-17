@@ -1,0 +1,274 @@
+import { structured } from "./anthropic";
+import { VOICES } from "./voices";
+import type {
+  Challenge,
+  ClinicalArea,
+  ClinicalSummary,
+  PanelChoice,
+  PanelRequest,
+  Synthesis,
+  Take,
+} from "./types";
+
+/**
+ * A second pass over a finished debate, rewritten for the person the reader is
+ * about to sit in front of.
+ *
+ * The audience change is the whole job. The consumer summary is written to be
+ * read slowly by someone worried about themselves; this one is written to be
+ * skimmed in under a minute by a clinician who has never met them, and who
+ * needs onset, course, function, and what the patient actually wants — in that
+ * order, because that is the order a history gets taken in.
+ *
+ * What it must never become is a referral letter. It carries no diagnosis, no
+ * codes, and no authority, and the document says so on every page.
+ */
+
+const AREA_SCHEMA = {
+  type: "object",
+  properties: {
+    area: {
+      type: "string",
+      description:
+        "A domain or clinical question in under 12 words — 'task initiation, longstanding, worse without external structure'. Never a diagnosis, a disorder name, or an abbreviation for one.",
+    },
+    whyRaised: {
+      type: "string",
+      description: "One sentence on what in the account raised it. Point at their words.",
+    },
+    discriminators: {
+      type: "array",
+      minItems: 1,
+      maxItems: 3,
+      description:
+        "Features that would separate this from the alternatives — the questions worth asking, phrased for a clinician.",
+      items: { type: "string" },
+    },
+  },
+  required: ["area", "whyRaised", "discriminators"],
+  additionalProperties: false,
+} as const;
+
+const CLINICAL_SCHEMA = {
+  type: "object",
+  properties: {
+    reasonForContact: {
+      type: "string",
+      description:
+        "One line in clinical register on why they are seeking an appointment. No diagnosis.",
+    },
+    history: {
+      type: "array",
+      minItems: 1,
+      maxItems: 6,
+      description:
+        "Onset, course, and what changed — only what the person actually stated. Do not infer a timeline they did not give.",
+      items: { type: "string" },
+    },
+    functionalImpact: {
+      type: "array",
+      minItems: 1,
+      maxItems: 5,
+      description:
+        "What they cannot currently do: work, study, household, relationships, self-care. Only what they reported.",
+      items: { type: "string" },
+    },
+    triedAlready: {
+      type: "array",
+      maxItems: 5,
+      description: "Anything they said they have already tried. Empty if they said nothing.",
+      items: { type: "string" },
+    },
+    areasToExplore: {
+      type: "array",
+      minItems: 2,
+      maxItems: 6,
+      items: AREA_SCHEMA,
+    },
+    worthExcluding: {
+      type: "array",
+      maxItems: 6,
+      description:
+        "Ordinary physical contributors worth excluding, only where the account gives a reason to. Do not list a standard panel by reflex.",
+      items: { type: "string" },
+    },
+    whatTheyreAskingFor: {
+      type: "array",
+      minItems: 1,
+      maxItems: 4,
+      description:
+        "What the person appears to want from the appointment — assessment, explanation, a letter, symptom relief, to be believed. Infer carefully and mark it as inference where it is one.",
+      items: { type: "string" },
+    },
+  },
+  required: [
+    "reasonForContact",
+    "history",
+    "functionalImpact",
+    "triedAlready",
+    "areasToExplore",
+    "worthExcluding",
+    "whatTheyreAskingFor",
+  ],
+  additionalProperties: false,
+} as const;
+
+const SYSTEM = `You are rewriting a discussion for a clinician who is about to see this person for the first time and has roughly ten minutes.
+
+You are not writing a referral, and you have no clinical standing. You are compressing what one person typed, plus a panel's reading of it, into something a doctor can skim before the consultation.
+
+Absolute rules:
+- No diagnosis. No disorder names, no abbreviations for them, no "query X", no ICD or DSM codes, anywhere in your output. Name domains, observations, and questions instead. If a whole area only makes sense with a label attached, describe the pattern rather than naming it — a clinician will recognise it, and it is not your place to put the word in their head.
+- No treatment recommendations. No medication of any kind.
+- Do not invent history. If onset, duration, or prior treatment were not stated, do not supply them. A clinician acting on a detail this person never said is the worst thing this document could cause.
+- Distinguish what they reported from what the panel inferred. Where something is inference, say so in the line itself.
+- Clinical register: compressed, concrete, no hedging filler, no reassurance. Sentence fragments are fine. This is note-form, not prose.
+- Nothing evaluative about the person. No "appears motivated", no "seems reliable".
+
+The panel discussion you are given was generated by an AI system from a few sentences of self-report. Treat it as a structured reading of the patient's account and nothing more.`;
+
+export async function clinicalSynthesis(
+  request: PanelRequest,
+  panel: PanelChoice,
+  takes: Take[],
+  challenges: Challenge[],
+  synthesis: Synthesis | null,
+  signal?: AbortSignal,
+): Promise<ClinicalSummary> {
+  const transcript = [
+    "## Panel's opening reads",
+    ...takes.map((t) => `### ${VOICES[t.voiceId].name}\n${t.text}`),
+    "## Where they pushed back on each other",
+    ...challenges.map(
+      (c) => `### ${VOICES[c.voiceId].name} → ${VOICES[c.targetId].name}\n${c.text}`,
+    ),
+    ...(synthesis
+      ? [
+          "## The panel's own summary",
+          synthesis.plainSummary,
+          "### Unresolved between them",
+          ...synthesis.disagreements.map(
+            (d) => `- ${d.topic}. Settled by: ${d.whatWouldSettleIt}`,
+          ),
+          "### Discriminating observations it suggested",
+          ...synthesis.waysToTellApart.map((w) => `- ${w}`),
+        ]
+      : []),
+  ].join("\n\n");
+
+  const raw = await structured<ClinicalSummary>({
+    system: SYSTEM,
+    user: `Patient's own words, verbatim:
+
+"""
+${request.question.trim()}
+"""
+
+This account is about: ${
+      request.about === "me"
+        ? "the person themselves"
+        : request.about === "a-child-or-teen"
+          ? "a child or teenager, described by an adult"
+          : "an adult, described by someone close to them"
+    }
+
+How the panel framed the question: ${panel.framing}
+
+${transcript}`,
+    effort: "medium",
+    maxTokens: 6000,
+    schema: CLINICAL_SCHEMA as unknown as Record<string, unknown>,
+    signal,
+  });
+
+  return normaliseClinical(raw);
+}
+
+/**
+ * Words that turn a domain into a diagnosis. The prompt forbids them, and this
+ * is the backstop — a label reaching a clinician's desk is the one failure
+ * here that actually changes someone's care, so it gets checked twice.
+ */
+const DIAGNOSTIC_TERMS = [
+  "adhd",
+  "add",
+  "asd",
+  "autism",
+  "autistic",
+  "asperger",
+  "ocd",
+  "ptsd",
+  "cptsd",
+  "bpd",
+  "eupd",
+  "bipolar",
+  "schizophreni",
+  "psychosis",
+  "psychotic",
+  "depression",
+  "depressive",
+  "mdd",
+  "gad",
+  "anxiety disorder",
+  "panic disorder",
+  "social phobia",
+  "agoraphobia",
+  "anorexi",
+  "bulimi",
+  "arfid",
+  "bed",
+  "dyslexi",
+  "dyspraxi",
+  "dyscalculi",
+  "tourette",
+  "fnd",
+  "cfs",
+  "me/cfs",
+  "fibromyalgia",
+  "dissociative",
+  "borderline personality",
+  "narcissistic",
+  "dsm",
+  "icd-10",
+  "icd-11",
+];
+
+/** True when a string names a condition rather than describing a pattern. */
+export function namesADiagnosis(text: string): boolean {
+  const lower = ` ${text.toLowerCase().replace(/[^a-z0-9/\- ]/g, " ")} `;
+  return DIAGNOSTIC_TERMS.some((term) =>
+    // Word-boundary match so "bed" doesn't fire on "bedtime" and "add" doesn't
+    // fire on "address", while multi-word terms still match as phrases.
+    new RegExp(`(^|[^a-z0-9])${term.replace(/[/\-]/g, "\\$&")}([^a-z0-9]|$)`).test(lower),
+  );
+}
+
+const strings = (xs: unknown, limit: number): string[] =>
+  (Array.isArray(xs) ? xs : [])
+    .filter((x): x is string => typeof x === "string" && x.trim().length > 0)
+    .map((x) => x.trim())
+    .slice(0, limit);
+
+export function normaliseClinical(raw: ClinicalSummary): ClinicalSummary {
+  const areas: ClinicalArea[] = (Array.isArray(raw?.areasToExplore) ? raw.areasToExplore : [])
+    .filter((a) => a && typeof a.area === "string" && a.area.trim().length > 0)
+    // A labelled area is dropped rather than rewritten: silently editing it
+    // would leave the reasoning attached to a heading that no longer matches.
+    .filter((a) => !namesADiagnosis(a.area))
+    .map((a) => ({
+      area: a.area.trim(),
+      whyRaised: (a.whyRaised ?? "").trim(),
+      discriminators: strings(a.discriminators, 3),
+    }))
+    .slice(0, 6);
+
+  return {
+    reasonForContact: (raw?.reasonForContact ?? "").trim(),
+    history: strings(raw?.history, 6),
+    functionalImpact: strings(raw?.functionalImpact, 5),
+    triedAlready: strings(raw?.triedAlready, 5),
+    areasToExplore: areas,
+    worthExcluding: strings(raw?.worthExcluding, 6),
+    whatTheyreAskingFor: strings(raw?.whatTheyreAskingFor, 4),
+  };
+}

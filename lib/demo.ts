@@ -1,4 +1,11 @@
-import type { PanelChoice, PanelRequest, Synthesis, Take, VoiceId } from "./types";
+import type {
+  ClinicalSummary,
+  PanelChoice,
+  PanelRequest,
+  Synthesis,
+  Take,
+  VoiceId,
+} from "./types";
 
 /**
  * Three complete, hand-written debates so the app is usable — and honestly
@@ -15,6 +22,8 @@ export interface DemoDebate {
   takes: Take[];
   challenges: Array<{ voiceId: VoiceId; targetId: VoiceId; text: string }>;
   synthesis: Synthesis;
+  /** The clinician-facing pass, so demo mode covers that feature too. */
+  clinical: ClinicalSummary;
 }
 
 export const DEMOS: DemoDebate[] = [
@@ -173,6 +182,63 @@ export const DEMOS: DemoDebate[] = [
         "Whether anything physical is contributing — sleep, thyroid, iron and B12 all produce this picture and none of them can be sorted out from text.",
       ],
     },
+    clinical: {
+      reasonForContact:
+        "Longstanding difficulty initiating tasks, reported as markedly worse over the past year, now affecting work output.",
+      history: [
+        "Reports the pattern since school; describes it as constant rather than episodic.",
+        "Marked worsening reported after moving to fully remote work approximately one year ago.",
+        "No prior assessment, treatment, or contact with services reported.",
+      ],
+      functionalImpact: [
+        "Reports losing up to four hours before starting work with a deadline the following day.",
+        "Describes marked self-criticism during these periods; distress appears to compound the delay.",
+      ],
+      triedAlready: [],
+      areasToExplore: [
+        {
+          area: "Task initiation versus sustained attention, longstanding",
+          whyRaised:
+            "Patient locates the difficulty at starting rather than at continuing once underway.",
+          discriminators: [
+            "Whether difficulty persists once a task is underway or resolves after the first few minutes.",
+            "Whether the pattern appears with low-stakes and enjoyable tasks as well as obligations.",
+          ],
+        },
+        {
+          area: "Dependence on external structure",
+          whyRaised: "Reported deterioration coincides with removal of workplace structure.",
+          discriminators: [
+            "Whether working alongside others, in person or on video, restores function.",
+            "Whether the change also reduced social contact, exercise, or routine.",
+          ],
+        },
+        {
+          area: "Mood, energy, and sleep across the same period",
+          whyRaised:
+            "Timing overlaps with an isolating change; not screened for anywhere in the account.",
+          discriminators: [
+            "Anhedonia, appetite, diurnal variation, and sleep over the last twelve months.",
+          ],
+        },
+        {
+          area: "Reliability of retrospective childhood account",
+          whyRaised:
+            "Panel noted that recall of school-age difficulty is shaped by a currently held explanation.",
+          discriminators: [
+            "Contemporaneous evidence such as school reports, or an account from a parent.",
+          ],
+        },
+      ],
+      worthExcluding: [
+        "Sleep quality and duration, given the reported timing.",
+        "Ferritin, B12, thyroid function, if not checked recently.",
+      ],
+      whatTheyreAskingFor: [
+        "An explanation for a pattern they describe as lifelong.",
+        "Inferred, not stated: to be taken seriously rather than advised to try harder.",
+      ],
+    },
   },
 
   {
@@ -323,6 +389,54 @@ export const DEMOS: DemoDebate[] = [
         "Whether anything else is going on alongside it. Loops like this often travel with company, and four lines won't show that.",
       ],
     },
+    clinical: {
+      reasonForContact:
+        "Repetitive worry with insight preserved, maintained by reassurance-seeking; reports hours lost per episode.",
+      history: [
+        "Reports looping on the same worry for hours at a time; duration of the overall pattern not stated.",
+        "Describes recognising the worry as irrational while it is happening.",
+        "No prior assessment or treatment reported.",
+      ],
+      functionalImpact: [
+        "Reports hours consumed per episode.",
+        "Describes repeated internet searching for reassurance, with relief lasting approximately ten minutes.",
+      ],
+      triedAlready: [
+        "Self-directed reassurance-seeking via internet searching, described as unhelpful beyond the short term.",
+      ],
+      areasToExplore: [
+        {
+          area: "Reassurance-seeking as a maintaining behaviour",
+          whyRaised:
+            "Patient reports relief of roughly ten minutes followed by return of distress; panel treated the short half-life as the central feature.",
+          discriminators: [
+            "Whether finding a reassuring answer satisfies, or resets the search.",
+            "What distress does when a search is deliberately delayed.",
+          ],
+        },
+        {
+          area: "Fixed-theme versus roaming worry content",
+          whyRaised:
+            "Distinguishes two patterns that respond to different approaches; not established in the account.",
+          discriminators: [
+            "Whether the worry fixes on one theme and demands certainty, or moves with whatever is current.",
+          ],
+        },
+        {
+          area: "Intact insight alongside persistent distress",
+          whyRaised:
+            "Patient explicitly reports knowing the worry is irrational, and reports this makes it worse.",
+          discriminators: [
+            "Whether the knowing-feeling gap is itself a source of shame the patient has not raised.",
+          ],
+        },
+      ],
+      worthExcluding: [],
+      whatTheyreAskingFor: [
+        "An explanation for why insight does not reduce the distress.",
+        "Inferred, not stated: a specific approach rather than general talking therapy.",
+      ],
+    },
   },
 
   {
@@ -471,6 +585,57 @@ export const DEMOS: DemoDebate[] = [
         "Whether this is autistic burnout, an energy-limiting condition, ordinary introversion, or something else. Those need someone asking you questions in both directions, over time.",
         "What your bloods say. Several unremarkable physical causes produce exactly this and none of them can be sorted out from a paragraph.",
         "How much of the cost is the event and how much is the anticipation and the week around it, which you'd only see by tracking it.",
+      ],
+    },
+    clinical: {
+      reasonForContact:
+        "Disproportionate post-social fatigue lasting one to two days, following events the patient reports enjoying.",
+      history: [
+        "Reports one to two days of recovery after any social event, including welcome ones with familiar people.",
+        "Describes the state as emptiness rather than low mood.",
+        "Duration of the overall pattern not stated. No prior investigation reported.",
+      ],
+      functionalImpact: [
+        "Reports being unable to function for one to two days following social contact.",
+        "Reports presenting as outgoing during events, with the cost invisible to others.",
+      ],
+      triedAlready: [],
+      areasToExplore: [
+        {
+          area: "Recovery time disproportionate to exertion",
+          whyRaised:
+            "A one-to-two-day recovery after an ordinary social evening was the detail the panel could not account for on effort alone.",
+          discriminators: [
+            "Whether comparable fatigue follows a long solitary day of similar duration.",
+            "Whether recovery shortens when the patient goes in rested.",
+          ],
+        },
+        {
+          area: "Effortful social performance and its delayed cost",
+          whyRaised:
+            "Patient reports being perceived as outgoing while describing a cost others do not see.",
+          discriminators: [
+            "Whether cost scales with duration, group size, or sensory load rather than with enjoyment.",
+            "Whether quiet one-to-one contact produces the same recovery period.",
+          ],
+        },
+        {
+          area: "Presentation quality obscuring functional impairment",
+          whyRaised:
+            "Patient anticipates not being believed; panel noted this pattern is commonly missed where someone presents well.",
+          discriminators: [
+            "Function in the days after an event, rather than observed presentation during one.",
+          ],
+        },
+      ],
+      worthExcluding: [
+        "Ferritin, B12, thyroid function, vitamin D.",
+        "Sleep quality as distinct from time in bed; consider screening for sleep-disordered breathing.",
+        "Post-viral fatigue, if there was an illness preceding onset.",
+      ],
+      whatTheyreAskingFor: [
+        "For the recovery period, rather than the tiredness, to be the thing that is assessed.",
+        "Inferred, not stated: to be believed despite presenting well.",
       ],
     },
   },

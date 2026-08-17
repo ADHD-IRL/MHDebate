@@ -73,6 +73,41 @@ export interface Synthesis {
   whatThisCannotTell: string[];
 }
 
+/**
+ * The debate rewritten for a clinician with ten minutes and no context.
+ *
+ * Deliberately not a differential. `areasToExplore` names domains and
+ * observations, never diagnostic labels — a document that arrives on a
+ * clinician's desk carrying a label the patient never earned anchors the
+ * appointment before it starts, and this tool has no standing to do that.
+ * The consumer summary refuses to name a condition for the reader; the
+ * clinical one cannot be allowed to do what the consumer one won't.
+ */
+export interface ClinicalArea {
+  /** A domain or question — "task initiation, longstanding" — not a diagnosis. */
+  area: string;
+  /** What in the account raised it. */
+  whyRaised: string;
+  /** Features that would separate this from the alternatives. */
+  discriminators: string[];
+}
+
+export interface ClinicalSummary {
+  /** One line, clinical register, on why the person is booking. */
+  reasonForContact: string;
+  /** Onset, course, and what changed. */
+  history: string[];
+  /** What they cannot currently do. Usually what actually drives decisions. */
+  functionalImpact: string[];
+  /** Anything already tried, only if they said so. */
+  triedAlready: string[];
+  areasToExplore: ClinicalArea[];
+  /** Ordinary physical contributors worth excluding. */
+  worthExcluding: string[];
+  /** What the person is hoping to get from the appointment. */
+  whatTheyreAskingFor: string[];
+}
+
 export interface SeatedVoice {
   id: VoiceId;
   /** Why this voice was invited, in the reader's words. */
