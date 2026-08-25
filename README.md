@@ -139,8 +139,8 @@ elsewhere. There is also a plain-text export for pasting into a portal message.
 ## Layout
 
 ```
-app/            pages and the SSE route
-components/     UI, all presentational except Panel/AskForm
+app/            pages, the SSE panel route, and the appointment-notes route
+components/     UI, all presentational except Panel/AskForm/ShareWithDoctor
 lib/
   voices.ts     the 14 voices, their lenses, their blind spots, their source roles
   safety.ts     the four-level screen and the support directory
@@ -151,7 +151,7 @@ lib/
   anthropic.ts  the only file that talks to the model
   demo.ts       the three written examples
 data/           the source 63-agent registry, kept for provenance
-tests/          42 tests, no network
+tests/          66 tests, no network
 ```
 
 ## Tests
