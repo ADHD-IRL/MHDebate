@@ -6,20 +6,21 @@ import { AskForm, type Example } from "./AskForm";
 import { ChallengeCard } from "./ChallengeCard";
 import { StageRail } from "./StageRail";
 import { SupportPanel } from "./SupportPanel";
+import { ShareWithDoctor } from "./ShareWithDoctor";
 import { SynthesisView } from "./SynthesisView";
 import { TakeCard } from "./TakeCard";
 import { VoiceNamePill } from "./VoiceBadge";
 import { usePanel, type StartOptions } from "@/lib/usePanel";
 import { CRISIS_LINES, supportFor } from "@/lib/safety";
 import { VOICES } from "@/lib/voices";
-import type { PanelRequest } from "@/lib/types";
+import type { PanelRequest, VoiceId } from "@/lib/types";
 
 /** `intro` is rendered only while the form is showing, so the hero gets out of
  *  the way once the panel is actually talking. */
 export function Panel({ intro }: { intro?: React.ReactNode }) {
   const { state, start, reset } = usePanel();
   const [config, setConfig] = useState<{ demo: boolean; examples: Example[] } | null>(null);
-  const [pending, setPending] = useState<PanelRequest | null>(null);
+  const [pending, setPending] = useState<StartOptions | null>(null);
   const transcriptRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -171,6 +172,7 @@ export function Panel({ intro }: { intro?: React.ReactNode }) {
 
   // ---------------------------------------------------------- transcript
 
+  const demoSlug = pending?.demoSlug;
   const seatedReason = new Map(state.panel?.seated.map((s) => [s.id, s.reason]) ?? []);
   const panelSize = state.panel?.seated.length ?? Object.keys(state.takes).length;
 
@@ -300,8 +302,23 @@ export function Panel({ intro }: { intro?: React.ReactNode }) {
 
       {state.synthesis ? <SynthesisView synthesis={state.synthesis} panelSize={panelSize} /> : null}
 
-      {finished ? (
+      {finished && pending ? (
         <div className="space-y-6 border-t border-line pt-8">
+          <ShareWithDoctor
+            request={pending}
+            panel={state.panel}
+            takes={Object.entries(state.takes)
+              .filter(([, take]) => take.text.trim().length > 0)
+              .map(([voiceId, take]) => ({ voiceId: voiceId as VoiceId, text: take.text }))}
+            challenges={state.challenges.map(({ voiceId, targetId, text }) => ({
+              voiceId,
+              targetId,
+              text,
+            }))}
+            synthesis={state.synthesis}
+            demoSlug={demoSlug}
+          />
+
           <div className="rounded-2xl border border-line bg-raised p-5">
             <h2 className="font-display text-lg">One last thing</h2>
             <p className="mt-2 max-w-prose text-sm text-muted">

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { DEMOS, demoBySlug } from "@/lib/demo";
 import { normaliseSynthesis } from "@/lib/engine";
 import { screen } from "@/lib/safety";
+import { namesADiagnosis, normaliseClinical } from "@/lib/clinical";
 import { VOICES } from "@/lib/voices";
 import { supportLabel } from "@/components/SynthesisView";
 
@@ -47,6 +48,21 @@ describe("worked examples", () => {
     // would be the failure mode, not the success case.
     for (const demo of DEMOS) {
       expect(demo.synthesis.disagreements.length).toBeGreaterThan(0);
+    }
+  });
+
+  it("ships clinician notes that name no diagnosis", () => {
+    // These are hand-written, so the guard that protects model output does not
+    // cover them. Same bar either way: nothing that reaches a clinician's desk
+    // carries a label the patient never earned.
+    for (const demo of DEMOS) {
+      for (const area of demo.clinical.areasToExplore) {
+        expect(namesADiagnosis(area.area)).toBe(false);
+      }
+      expect(normaliseClinical(demo.clinical).areasToExplore).toHaveLength(
+        demo.clinical.areasToExplore.length,
+      );
+      expect(demo.clinical.reasonForContact.length).toBeGreaterThan(10);
     }
   });
 
